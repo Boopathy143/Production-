@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hourly Filling Report</title>
+
+<style>
+body{margin:0;font-family:Segoe UI;background:#eef2ff}
+.container{padding:12px}
+.card{background:#fff;padding:14px;border-radius:14px;margin-bottom:14px;box-shadow:0 6px 18px rgba(0,0,0,0.08)}
+h3{margin:0 0 10px}
+input,select,textarea{width:100%;padding:9px;border-radius:10px;border:1px solid #e5e7eb;background:#f9fafb;box-sizing:border-box}
+textarea{height:60px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{background:#2563eb;color:#fff;padding:8px}
+td{border:1px solid #eee;padding:6px}
+.total{background:#e0e7ff;font-weight:bold}
+.stat{background:#f1f5f9;padding:7px;border-radius:10px;margin-top:6px;font-size:13px}
+.fab{position:fixed;bottom:20px;right:20px;background:#2563eb;color:#fff;border:none;padding:16px;border-radius:50px}
+.actions{display:flex;gap:10px;margin-bottom:10px}
+.actions button{flex:1;padding:10px;border:none;border-radius:10px;background:#2563eb;color:#fff}
+</style>
+</head>
+
+<body>
+
+<div class="container" id="report">
+
+<div class="actions">
+<button onclick="clearAll()">Clear</button>
+<button onclick="exportExcel()">Excel</button>
+</div>
+
+<div class="card">
+<h3>BLU Polymer</h3>
+Date <input type="date" class="save" onclick="this.showPicker && this.showPicker()">
+Shift
+<select class="save">
+<option>A Shift</option>
+<option>B Shift</option>
+</select>
+Operator <input class="save">
+Filling QC <input class="save">
+</div>
+
+<div class="card">
+<table>
+<tr><th>Time</th><th>Line1</th><th>Line2</th><th>Line3</th></tr>
+<tbody id="hour"></tbody>
+<tr class="total"><td>Total</td><td id="t1">0</td><td id="t2">0</td><td id="t3">0</td></tr>
+</table>
+</div>
+
+<div id="cards"></div>
+
+</div>
+
+<button class="fab" onclick="window.print()">PDF</button>
+
+<script>
+
+const skuData={
+"35FT":{bpb:336,bpp:48},
+"50FT":{bpb:336,bpp:48},
+"60FT":{bpb:192,bpp:48},
+"90FT":{bpb:120,bpp:72},
+"160FT":{bpb:100,bpp:60},
+"450FT":{bpb:40,bpp:56}
+}
+
+const brands=["OOM GOLD","NIHAR GOLD","OOM ADVANCE","NIHAR ADVANCE"]
+
+const times=["9","10","11","12","1","2","3","4","5","6","7","8"]
+times.forEach(t=>{
+hour.innerHTML+=`
+<tr>
+<td>${t}</td>
+<td><input class="l1 save" value=0 oninput=calc()></td>
+<td><input class="l2 save" value=0 oninput=calc()></td>
+<td><input class="l3 save" value=0 oninput=calc()></td>
+</tr>`
+})
+
+function createCard(line){
+cards.innerHTML+=`
+<div class="card">
+<h3>Line ${line}</h3>
+
+Brand
+<select id=brand${line} class="save">${brands.map(b=>`<option>${b}</option>`)}</select>
+
+SKU
+<select id=sku${line} class="save" onchange=calc()>
+${Object.keys(skuData).map(s=>`<option>${s}</option>`)}
+</select>
+
+<div class="stat">Bottle/Box: <span id=bpb${line}>0</span></div>
+<div class="stat">Boxes Total: <span id=box${line}>0</span></div>
+<div class="stat">Total Pallet: <span id=pal${line}>0</span></div>
+<div class="stat">Production Bottles: <span id=prod${line}>0</span></div>
+<div class="stat">Running Hours: <span id=hrs${line}>0</span></div>
+
+<h4>Rejection</h4>
+Damage <input id=rd${line} class="save" value=0 oninput=calc()>
+Oil Bottle <input id=ro${line} class="save" value=0 oninput=calc()>
+
+<div class="stat">Total Reject: <span id=rt${line}>0</span></div>
+<div class="stat">Net Production: <span id=net${line}>0</span></div>
+
+<h4>Printing Consumption</h4>
+<table>
+<tr><th>Machine</th><th>PM Code</th><th>Count</th></tr>
+<tr><td><select class="save"><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></td><td><input class="save"></td><td><input class="pc${line} save" value=0 oninput=calc()></td></tr>
+<tr><td>Old</td><td><input class="save"></td><td><input class="pc${line} save" value=0 oninput=calc()></td></tr>
+<tr><td>Old</td><td><input class="save"></td><td><input class="pc${line} save" value=0 oninput=calc()></td></tr>
+</table>
+
+<h4>Consumption Summary</h4>
+Taken <input id=tk${line} class="save" value=0 oninput=calc()>
+Reject <input id=pr${line} class="save" value=0 oninput=calc()>
+
+<div class="stat">Used: <span id=use${line}>0</span></div>
+<div class="stat">Balance: <span id=bal${line}>0</span></div>
+
+CFC Coding <input class="save">
+IJP <input class="save">
+Remark <textarea class="save"></textarea>
+</div>`
+}
+
+createCard(1);createCard(2);createCard(3)
+
+function sum(cls){let s=0;document.querySelectorAll(cls).forEach(i=>s+=+i.value);return s}
+
+function calc(){
+let s1=sum(".l1"),s2=sum(".l2"),s3=sum(".l3")
+t1.innerText=s1;t2.innerText=s2;t3.innerText=s3
+updateLine(1,s1);updateLine(2,s2);updateLine(3,s3)
+saveData()
+}
+
+function updateLine(l,boxes){
+let sk=skuData[document.getElementById("sku"+l).value]
+let bpb=sk.bpb
+
+document.getElementById("bpb"+l).innerText=bpb
+document.getElementById("box"+l).innerText=boxes
+document.getElementById("pal"+l).innerText=(boxes/sk.bpp).toFixed(2)
+document.getElementById("prod"+l).innerText=boxes*bpb
+
+let rej=(+document.getElementById("rd"+l).value||0)+(+document.getElementById("ro"+l).value||0)
+document.getElementById("rt"+l).innerText=rej
+document.getElementById("net"+l).innerText=(boxes*bpb)-rej
+
+let used=sum(".pc"+l)
+document.getElementById("use"+l).innerText=used
+
+let taken=+document.getElementById("tk"+l).value||0
+let preject=+document.getElementById("pr"+l).value||0
+document.getElementById("bal"+l).innerText=taken-used-preject
+
+let hrs=0
+document.querySelectorAll(".l"+l).forEach(i=>{if(+i.value>0) hrs++})
+document.getElementById("hrs"+l).innerText=hrs
+}
+
+function saveData(){
+let data={}
+document.querySelectorAll(".save").forEach((el,i)=>data[i]=el.value)
+localStorage.setItem("reportData",JSON.stringify(data))
+}
+
+function loadData(){
+let data=JSON.parse(localStorage.getItem("reportData")||"{}")
+document.querySelectorAll(".save").forEach((el,i)=>{if(data[i]!=null)el.value=data[i]})
+}
+
+function clearAll(){
+localStorage.removeItem("reportData")
+location.reload()
+}
+
+function exportExcel(){
+let csv="Hourly Report\n"
+document.querySelectorAll(".save").forEach(el=>{
+csv+=el.value+","
+})
+let blob=new Blob([csv],{type:"text/csv"})
+let a=document.createElement("a")
+a.href=URL.createObjectURL(blob)
+a.download="Hourly_Report.csv"
+a.click()
+}
+
+loadData()
+calc()
+document.querySelectorAll(".save").forEach(el=>el.addEventListener("input",saveData))
+
+</script>
+</body>
+</html>
